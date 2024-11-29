@@ -1,59 +1,69 @@
-// src/components/Report.js
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import useInspectionStore from '../store/inspectionStore';
+import { Header } from '../components/Header';
+import { ImageFrame } from '../components/ImageFrame';
+import { ReportHeader } from '../components/Report/ReportHeader';
+import { VehicleDetails } from '../components/Report/VehicleDetails';
+import { DamageDetailsTable } from '../components/Report/DamageDetailsTable';
+import { TotalCost } from '../components/Report/TotalCost';
+import { generatePDF } from '../utils/pdfGenerator';
 
-function Report() {
-  const { damageItems } = useInspectionStore();
+export default function Report() {
+  const { images, damageAnnotations } = useInspectionStore();
+  const [totalCost, setTotalCost] = useState(0);
+  const referenceNo = "IAR-5614005";
 
-  const totalCost = damageItems.reduce((sum, item) => sum + item.cost, 0);
+  useEffect(() => {
+    const cost = damageAnnotations.reduce(
+      (sum, annotation) => sum + (parseFloat(annotation.ActualCostRepair) || 0),
+      0
+    );
+    setTotalCost(cost);
+  }, [damageAnnotations]);
+
+  const handleDownload = async () => {
+    await generatePDF({
+      images,
+      damageAnnotations,
+      referenceNo,
+      totalCost
+    });
+  };
 
   return (
-    <div className="container mx-auto">
-      {/* Header Section */}
-      <div className="header text-center my-4">
-        <h1 className="text-3xl font-bold">Damage Report</h1>
-        <p>Report No: 123456</p>
-        <p>Date: {new Date().toLocaleDateString()}</p>
-      </div>
+    <div className="min-h-screen bg-gray-100">
+      <Header referenceNo={referenceNo} />
 
-      {/* Repair Details Table */}
-      <table className="table-auto w-full my-4">
-        <thead>
-          <tr>
-            <th>Description</th>
-            <th>Quantity</th>
-            <th>Unit Price ($)</th>
-            <th>Total Price ($)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {damageItems.map((item, index) => (
-            <tr key={index}>
-              <td>{item.name}</td>
-              <td>1</td>
-              <td>{item.cost.toFixed(2)}</td>
-              <td>{item.cost.toFixed(2)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="text-right font-bold">
-        Total: ${totalCost.toFixed(2)}
-      </div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <ReportHeader 
+            onDownload={handleDownload}
+            onPrint={() => window.print()}
+          />
 
-      {/* Additional Information */}
-      <div className="additional-info mt-8">
-        <h2 className="text-xl font-bold">Payment Details</h2>
-        <p>Method: Placeholder</p>
-        <p>Cardholder Name: Placeholder</p>
-      </div>
+          <VehicleDetails referenceNo={referenceNo} />
 
-      <div className="notes mt-4">
-        <h2 className="text-xl font-bold">Notes</h2>
-        <p>Placeholder for additional remarks or disclaimers.</p>
-      </div>
+          {/* Images with Damage Markings */}
+          <div className="space-y-8">
+            {images.map((image, index) => (
+              <div key={index} className="border rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-4">Image {index + 1}</h3>
+                <div id={`report-image-${index}`} className="relative">
+                  <ImageFrame image={image} />
+                </div>
+                
+                <DamageDetailsTable 
+                  annotations={damageAnnotations.filter(
+                    annotation => annotation.imageName === image.imageName
+                  )}
+                />
+              </div>
+            ))}
+          </div>
+
+          <TotalCost totalCost={totalCost} />
+        </div>
+      </main>
     </div>
   );
 }
-
-export default Report;
