@@ -1,8 +1,10 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import useInspectionStore from "../store/inspectionStore";
 import { useNavigate } from "react-router-dom";
-import { Link } from "react-router-dom";
+import { Header } from "../components/Header";
+import { ImageThumbnails } from "../components/ImageThumbnails";
+import { ImageFrame } from "../components/ImageFrame";
 
 export default function ImageDisplay() {
   const {
@@ -12,176 +14,130 @@ export default function ImageDisplay() {
     fetchImages,
     loading,
     error,
-  } = useInspectionStore(); // Removed currentImage from here
+  } = useInspectionStore();
 
   const navigate = useNavigate();
-  const referenceNo = "IAR-5614005"; // Replace with dynamic value if needed
+  const referenceNo = "IAR-5614005";
+  const containerRef = useRef(null);
 
-  // Fetch images when the component mounts
   useEffect(() => {
     fetchImages(referenceNo);
   }, [fetchImages, referenceNo]);
 
   const handleThumbnailClick = (index) => {
-    setCurrentImageIndex(index); // Update the current image
+    setCurrentImageIndex(index);
   };
 
-  const handlePrevious = () => {
+  const handlePrevious = (e) => {
+    e.stopPropagation(); // Prevent event from bubbling to container
     if (currentImageIndex > 0) {
       setCurrentImageIndex(currentImageIndex - 1);
     }
   };
 
-  const handleNext = () => {
+  const handleNext = (e) => {
+    e.stopPropagation(); // Prevent event from bubbling to container
     if (currentImageIndex < images.length - 1) {
       setCurrentImageIndex(currentImageIndex + 1);
     }
   };
 
   const handleMainImageClick = () => {
-    navigate("/review-edit"); // Navigate to the review & update page
+    navigate("/review-edit");
   };
 
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500">Loading images...</p>
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-center py-12">
-        <p className="text-red-500">{error}</p>
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-red-500 text-lg">{error}</p>
       </div>
     );
   }
 
-  const currentImg = images[currentImageIndex]; // Use images array directly
+  const currentImg = images[currentImageIndex];
 
   if (!currentImg || !currentImg.imageDimensions) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500">No images available for assessment</p>
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-gray-500 text-lg">No images available for assessment</p>
       </div>
     );
   }
 
-  // Calculate the aspect ratio
-  const aspectRatio =
-    (currentImg.imageDimensions.height / currentImg.imageDimensions.width) *
-    100;
-
   return (
-    <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
-      {/* Header with Navigation */}
-      <header className="flex justify-between items-center bg-gray-100 p-4 shadow">
-        <nav className="space-x-4">
-          <span className="text-blue-500 font-bold">Inspected Images</span>
-          <Link to="/review-edit" className="text-blue-500 hover:underline">
-            Review &amp; Edit
-          </Link>
-          <Link to="/report" className="text-blue-500 hover:underline">
-            Report Page
-          </Link>
-        </nav>
-      </header>
-      {/* Thumbnail Navigation */}
-      <div className="flex justify-start sm:justify-center space-x-2 overflow-x-auto pb-2 px-2">
-        {images.map((image, index) => (
-          <div
-            key={index}
-            className={`relative flex-shrink-0 w-16 sm:w-20 h-16 sm:h-20 cursor-pointer transition-transform hover:scale-105 ${
-              index === currentImageIndex ? "ring-2 ring-yellow-400" : ""
-            }`}
-            onClick={() => handleThumbnailClick(index)}
-          >
-            <img
-              src={image.imageUrl}
-              alt={`Thumbnail ${index + 1}`}
-              className="w-full h-full object-cover rounded"
+    <div className="min-h-screen bg-gray-100">
+      <Header referenceNo={referenceNo} />
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          {/* Section Title */}
+          <h2 className="text-xl font-semibold text-gray-800 mb-6">
+            Vehicle Inspection Images
+          </h2>
+
+          {/* Thumbnails Section */}
+          <div className="border-b border-gray-200 pb-6">
+            <h3 className="text-sm font-medium text-gray-500 mb-4">
+              Image Gallery
+            </h3>
+            <ImageThumbnails
+              images={images}
+              currentImageIndex={currentImageIndex}
+              onThumbnailClick={handleThumbnailClick}
             />
           </div>
-        ))}
-      </div>
 
-      {/* Main Image Display */}
-      <div className="relative bg-black rounded-lg shadow-lg overflow-hidden">
-        <div
-          className="relative w-full cursor-pointer"
-          style={{ paddingBottom: `${aspectRatio}%` }}
-          onClick={handleMainImageClick}
-        >
-          <img
-            src={currentImg.imageUrl}
-            alt={`Vehicle damage ${currentImageIndex + 1}`}
-            className="absolute top-0 left-0 w-full h-full object-contain"
-          />
+          {/* Main Image Section */}
+          <div className="mt-6">
+            <h3 className="text-sm font-medium text-gray-500 mb-4">
+              Selected Image Preview
+            </h3>
+            <div 
+              ref={containerRef}
+              className="relative bg-black rounded-xl overflow-hidden flex items-center justify-center cursor-pointer"
+              style={{ height: '70vh' }}
+              onClick={handleMainImageClick}
+            >
+              <ImageFrame image={currentImg} />
 
-          {/* Rectangle Markings */}
-          {currentImg.damageInfo?.map((damage, index) => {
-            const { x, y, width, height } = damage.coordinates || {};
-            if (
-              x === undefined ||
-              y === undefined ||
-              width === undefined ||
-              height === undefined
-            )
-              return null;
-
-            const xPercent = (x / currentImg.imageDimensions.width) * 100;
-            const yPercent = (y / currentImg.imageDimensions.height) * 100;
-            const widthPercent =
-              (width / currentImg.imageDimensions.width) * 100;
-            const heightPercent =
-              (height / currentImg.imageDimensions.height) * 100;
-
-            return (
-              <div
-                key={index}
-                className="absolute border-2"
-                style={{
-                  left: `${xPercent}%`,
-                  top: `${yPercent}%`,
-                  width: `${widthPercent}%`,
-                  height: `${heightPercent}%`,
-                  borderColor:
-                    damage.repairReplace === "Repair" ? "green" : "red",
-                  boxSizing: "border-box",
-                }}
+              {/* Navigation Buttons */}
+              <button
+                onClick={handlePrevious}
+                disabled={currentImageIndex === 0}
+                className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/75 disabled:opacity-30 p-2 rounded-full transition-all focus:outline-none"
               >
-                <span
-                  className="absolute bg-black text-white text-xs px-1 rounded"
-                  style={{ top: "-20px", left: "0" }}
-                >
-                  {damage.repairReplace}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+                <ChevronLeft className="w-6 h-6 text-white" />
+              </button>
+              
+              <button
+                onClick={handleNext}
+                disabled={currentImageIndex === images.length - 1}
+                className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/75 disabled:opacity-30 p-2 rounded-full transition-all focus:outline-none"
+              >
+                <ChevronRight className="w-6 h-6 text-white" />
+              </button>
 
-        {/* Navigation Controls */}
-        <div className="absolute inset-y-0 left-0 flex items-center">
-          <button
-            onClick={handlePrevious}
-            disabled={currentImageIndex === 0}
-            className="bg-black/50 hover:bg-black/70 text-white p-1 sm:p-2 rounded-r disabled:opacity-50"
-          >
-            <ChevronLeft className="w-4 h-4 sm:w-6 sm:h-6" />
-          </button>
+              {/* Click to Edit Overlay */}
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/75 text-white px-4 py-2 rounded-full text-sm">
+                Click to edit image
+              </div>
+            </div>
+
+            {/* Image Counter */}
+            <div className="mt-4 text-center text-gray-600">
+              Image {currentImageIndex + 1} of {images.length}
+            </div>
+          </div>
         </div>
-        <div className="absolute inset-y-0 right-0 flex items-center">
-          <button
-            onClick={handleNext}
-            disabled={currentImageIndex === images.length - 1}
-            className="bg-black/50 hover:bg-black/70 text-white p-1 sm:p-2 rounded-l disabled:opacity-50"
-          >
-            <ChevronRight className="w-4 h-4 sm:w-6 sm:h-6" />
-          </button>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

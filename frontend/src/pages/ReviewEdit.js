@@ -1,8 +1,16 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Link } from "react-router-dom";
 import useInspectionStore from "../store/inspectionStore";
+import { Header } from "../components/Header";
+import { ImageThumbnails } from "../components/ImageThumbnails";
+import { ImageFrame } from "../components/ImageFrame";
+import { DamageLegend } from "../components/DamageLegend";
+import { ImageControls } from "../components/ImageControls";
+import { StatusBar } from "../components/ReviewEdit/StatusBar";
 import AnnotationList from "../components/ReviewEdit/AnnotationList";
+import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
+import { useImageZoom } from "../hooks/useImageZoom";
+import { useFullscreen } from "../hooks/useFullscreen";
 import apiUrl from "../config/apiConfig";
 
 export default function ReviewEdit() {
@@ -20,6 +28,10 @@ export default function ReviewEdit() {
 
   const [carParts, setCarParts] = useState([]);
   const referenceNo = "IAR-5614005";
+  const imageContainerRef = useRef(null);
+
+  const { scale, position, zoomIn, zoomOut, reset: resetZoom, handlePan } = useImageZoom(1);
+  const { toggleFullscreen } = useFullscreen(imageContainerRef);
 
   useEffect(() => {
     fetchCarParts();
@@ -35,9 +47,7 @@ export default function ReviewEdit() {
 
   const fetchCarParts = async () => {
     try {
-      const response = await fetch(
-        `${apiUrl}/api/carparts`
-      );
+      const response = await fetch(`${apiUrl}/api/carparts`);
       if (!response.ok) throw new Error("Failed to fetch car parts");
       const data = await response.json();
       setCarParts(data);
@@ -51,142 +61,134 @@ export default function ReviewEdit() {
   };
 
   const handleNext = () => {
-    if (currentImageIndex < images.length - 1)
-      setCurrentImageIndex(currentImageIndex + 1);
+    if (currentImageIndex < images.length - 1) setCurrentImageIndex(currentImageIndex + 1);
   };
 
-  if (loading) return <div>Loading images and damage data...</div>;
-  if (error) return <div>Error: {error}</div>;
-  if (!currentImage || !damageAnnotations)
-    return <div>No data available for assessment</div>;
+  useKeyboardNavigation(handlePrevious, handleNext);
 
-  const currentImg = currentImage; // Alias for clarity
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
-  const handleThumbnailClick = (index) => {
-    setCurrentImageIndex(index);
-  };
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-red-500 text-lg">{error}</p>
+      </div>
+    );
+  }
+
+  if (!currentImage || !damageAnnotations) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-gray-500 text-lg">No data available for assessment</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header with Navigation */}
-      <header className="flex justify-between items-center bg-gray-100 p-4 shadow">
-        <nav className="space-x-4">
-          <Link to="/images" className="text-blue-500 hover:underline">
-            Inspected Images
-          </Link>
-          <span className="text-blue-500 font-bold">Review Images</span>
-          <Link to="/report" className="text-blue-500 hover:underline">
-            Report Page
-          </Link>
-        </nav>
-      </header>
+    <div className="min-h-screen bg-gray-100">
+      <Header referenceNo={referenceNo} />
 
-      {/* Report Reference Number and Export Button */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold">Damage Assessment Report</h2>
-        <p className="text-gray-500">Reference No: {referenceNo}</p>
-        <button className="bg-blue-500 text-white px-4 py-2 rounded">
-          Export Report
-        </button>
-        {/* Thumbnail Navigation */}
-        <div className="flex space-x-2">
-          {images.map((image, index) => (
-            <div
-              key={image.imageName}
-              className={`relative flex-shrink-0 w-16 sm:w-24 h-16 sm:h-24 cursor-pointer ${
-                index === currentImageIndex ? "ring-2 ring-blue-500" : ""
-              }`}
-              onClick={() => handleThumbnailClick(index)}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          {/* Top Section */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-800">Damage Assessment Review</h2>
+              <p className="text-sm text-gray-500 mt-1">Reference: {referenceNo}</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <DamageLegend />
+              <button 
+                className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+                onClick={() => window.print()}
+              >
+                Export Report
+              </button>
+            </div>
+          </div>
+
+          {/* Status Bar */}
+          <StatusBar 
+            currentIndex={currentImageIndex}
+            total={images.length}
+            imageName={currentImage.imageName}
+          />
+
+          {/* Thumbnails Section */}
+          <div className="border-b border-gray-200 pb-6 mb-6">
+            <ImageThumbnails
+              images={images}
+              currentImageIndex={currentImageIndex}
+              onThumbnailClick={setCurrentImageIndex}
+            />
+          </div>
+
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Panel - Image Display */}
+            <div 
+              ref={imageContainerRef}
+              className="relative bg-black rounded-xl overflow-hidden"
+              style={{ height: '70vh' }}
             >
-              <img
-                src={image.imageUrl}
-                alt={`Thumbnail ${index + 1}`}
-                className="w-full h-full object-cover rounded"
+              <div 
+                className="relative h-full"
+                style={{
+                  transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
+                  transition: 'transform 0.2s'
+                }}
+              >
+                <ImageFrame 
+                  image={currentImage}
+                  onPan={handlePan}
+                />
+              </div>
+
+              {/* Navigation Buttons */}
+              <button
+                onClick={handlePrevious}
+                disabled={currentImageIndex === 0}
+                className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/75 disabled:opacity-30 p-2 rounded-full transition-all focus:outline-none"
+              >
+                <ChevronLeft className="w-6 h-6 text-white" />
+              </button>
+              
+              <button
+                onClick={handleNext}
+                disabled={currentImageIndex === images.length - 1}
+                className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/75 disabled:opacity-30 p-2 rounded-full transition-all focus:outline-none"
+              >
+                <ChevronRight className="w-6 h-6 text-white" />
+              </button>
+
+              {/* Image Controls */}
+              <ImageControls
+                onZoomIn={zoomIn}
+                onZoomOut={zoomOut}
+                onReset={resetZoom}
+                onFullscreen={toggleFullscreen}
               />
             </div>
-          ))}
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Panel */}
-        <div className="relative bg-white rounded-lg shadow-lg overflow-hidden">
-          {/* Display the current image name */}
-          <div className="p-2 bg-gray-100 border-b text-center font-medium">
-            <p>Image Name: {currentImg.imageName}</p>
-          </div>
-          <div className="relative w-full h-[500px]">
-            <img
-              src={currentImg.imageUrl}
-              alt={`Vehicle damage ${currentImageIndex + 1}`}
-              className="absolute top-0 left-0 w-full h-full object-contain"
-            />
-            {/* Rectangle Markings */}
-            {currentImg.damageInfo?.map((damage, index) => {
-              const { x, y, width, height } = damage.coordinates || {};
-              if (
-                x === undefined ||
-                y === undefined ||
-                width === undefined ||
-                height === undefined
-              )
-                return null;
-
-              const xPercent = (x / currentImg.imageDimensions.width) * 100;
-              const yPercent = (y / currentImg.imageDimensions.height) * 100;
-              const widthPercent =
-                (width / currentImg.imageDimensions.width) * 100;
-              const heightPercent =
-                (height / currentImg.imageDimensions.height) * 100;
-
-              return (
-                <div
-                  key={index}
-                  className="absolute border-2"
-                  style={{
-                    left: `${xPercent}%`,
-                    top: `${yPercent}%`,
-                    width: `${widthPercent}%`,
-                    height: `${heightPercent}%`,
-                    borderColor:
-                      damage.repairReplace === "Repair" ? "green" : "red",
-                    boxSizing: "border-box",
-                  }}
-                />
-              );
-            })}
-          </div>
-          <div className="absolute inset-y-0 left-0 flex items-center">
-            <button
-              onClick={handlePrevious}
-              disabled={currentImageIndex === 0}
-              className="bg-black/50 hover:bg-black/70 text-white p-1 sm:p-2 rounded-r disabled:opacity-50"
-            >
-              <ChevronLeft className="w-4 h-4 sm:w-6 sm:h-6" />
-            </button>
-          </div>
-          <div className="absolute inset-y-0 right-0 flex items-center">
-            <button
-              onClick={handleNext}
-              disabled={currentImageIndex === images.length - 1}
-              className="bg-black/50 hover:bg-black/70 text-white p-1 sm:p-2 rounded-l disabled:opacity-50"
-            >
-              <ChevronRight className="w-4 h-4 sm:w-6 sm:h-6" />
-            </button>
+            {/* Right Panel - Annotation List */}
+            <div className="bg-white rounded-lg p-6 border border-gray-200">
+              <AnnotationList
+                damageAnnotations={damageAnnotations}
+                carParts={carParts}
+                referenceNo={referenceNo}
+                imageName={currentImage.imageName}
+                fetchDamageAnnotations={fetchDamageAnnotations}
+              />
+            </div>
           </div>
         </div>
-
-        {/* Right Panel */}
-        <div className="bg-white rounded-lg shadow-lg p-3 sm:p-6">
-          <AnnotationList
-            damageAnnotations={damageAnnotations}
-            carParts={carParts}
-            referenceNo={referenceNo}
-            imageName={images[currentImageIndex]?.imageName}
-            fetchDamageAnnotations={fetchDamageAnnotations}
-          />
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

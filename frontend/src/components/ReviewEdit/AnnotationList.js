@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
-import AnnotationEditor from "./AnnotationEditor";
-import { Edit2, Trash2 } from "lucide-react"; // Removed 'Save' import
-import apiUrl from "../../config/apiConfig";
+import React, { useState } from 'react';
+import { Edit2, Trash2, Plus } from 'lucide-react';
+import { DamageTypeIndicator } from '../DamageTypeIndicator';
+import AnnotationEditor from './AnnotationEditor';
+import apiUrl from '../../config/apiConfig';
 
 export default function AnnotationList({
   damageAnnotations,
@@ -11,95 +12,68 @@ export default function AnnotationList({
   fetchDamageAnnotations,
 }) {
   const [addingNew, setAddingNew] = useState(false);
-  const [filter, setFilter] = useState("All");
-  const [filteredAnnotations, setFilteredAnnotations] = useState([]);
   const [editingAnnotation, setEditingAnnotation] = useState(null);
-  const [totalCost, setTotalCost] = useState(0);
+  const [filter, setFilter] = useState('All');
 
-  const filterOptions = ["All", "Repair", "Replace"];
+  const totalCost = damageAnnotations.reduce(
+    (sum, annotation) => sum + (parseFloat(annotation.ActualCostRepair) || 0),
+    0
+  );
 
-  // Calculate Total Cost
-  useEffect(() => {
-    const total = damageAnnotations.reduce(
-      (sum, annotation) => sum + (parseFloat(annotation.ActualCostRepair) || 0),
-      0
-    );
-    setTotalCost(total.toFixed(2));
-  }, [damageAnnotations]);
-
-  // Function to apply the filter and update filteredAnnotations
-  useEffect(() => {
-    if (filter === "All") {
-      setFilteredAnnotations(damageAnnotations);
-    } else if (filter === "Repair") {
-      setFilteredAnnotations(
-        damageAnnotations.filter((annotation) => annotation.RepairReplaceID === 0)
-      );
-    } else if (filter === "Replace") {
-      setFilteredAnnotations(
-        damageAnnotations.filter((annotation) => annotation.RepairReplaceID === 1)
-      );
-    }
-  }, [filter, damageAnnotations]);
-
-  // Function to handle adding a new annotation
-  const handleAddAnnotation = async (newAnnotation) => {
+  const handleDelete = async (id) => {
     try {
-      const response = await fetch(
-        `${apiUrl}/api/damageannotations`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            carPartMasterId: newAnnotation.CarPartMasterID,
-            damageTypeId: newAnnotation.DamageTypeID,
-            repairReplaceId: newAnnotation.RepairReplaceID,
-            actualCostRepair: newAnnotation.ActualCostRepair,
-            imageName: imageName,
-            referenceNo: referenceNo,
-          }),
-        }
-      );
-      if (response.ok) {
-        await fetchDamageAnnotations(referenceNo, imageName);
-        setAddingNew(false);
-      } else {
-        throw new Error("Failed to add annotation");
+      const response = await fetch(`${apiUrl}/api/damageannotations/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete annotation');
       }
+
+      // Refresh the damage annotations list
+      await fetchDamageAnnotations(referenceNo, imageName);
     } catch (error) {
-      console.error("Error adding annotation:", error);
+      console.error('Error deleting annotation:', error);
+      // You might want to show an error message to the user here
     }
   };
 
-  // Function to handle deleting an annotation
-  const handleDelete = async (annotationId) => {
-    try {
-      const response = await fetch(
-        `${apiUrl}/api/damageannotations/${annotationId}`,
-        { method: "DELETE" }
-      );
-      if (response.ok) {
-        await fetchDamageAnnotations(referenceNo, imageName);
-      } else {
-        throw new Error("Failed to delete annotation");
-      }
-    } catch (error) {
-      console.error("Error deleting annotation:", error);
-    }
-  };
+  const filteredAnnotations = damageAnnotations.filter(annotation => {
+    if (filter === 'All') return true;
+    if (filter === 'Repair') return annotation.RepairReplaceID === 0;
+    if (filter === 'Replace') return annotation.RepairReplaceID === 1;
+    return true;
+  });
 
   return (
-    <div>
+    <div className="space-y-4">
+      {/* Header with Cost and Add Button */}
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-4">
+          <div className="bg-blue-50 px-4 py-2 rounded-lg">
+            <span className="text-blue-700 font-medium">Current Image Cost: </span>
+            <span className="text-blue-700 font-bold">₹{totalCost.toFixed(2)}</span>
+          </div>
+          <button
+            onClick={() => setAddingNew(true)}
+            className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add New Damage
+          </button>
+        </div>
+      </div>
+
       {/* Filter Buttons */}
-      <div className="flex flex-wrap gap-2 mb-4 sm:mb-6">
-        {filterOptions.map((type) => (
+      <div className="flex gap-2">
+        {['All', 'Repair', 'Replace'].map((type) => (
           <button
             key={type}
             onClick={() => setFilter(type)}
-            className={`px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base rounded-md ${
+            className={`px-4 py-2 rounded-lg transition-colors ${
               filter === type
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             {type}
@@ -107,108 +81,91 @@ export default function AnnotationList({
         ))}
       </div>
 
-      {/* Total Cost Summary */}
-      <div className="bg-blue-50 p-3 rounded-lg mb-4">
-        <div className="flex justify-between items-center">
-          <span className="text-blue-700 font-medium">Current Image Cost:</span>
-          <span className="text-blue-700 font-bold">₹{totalCost}</span>
-        </div>
-      </div>
-
-      {/* Damage List and Edit Form */}
-      <div className="space-y-4">
-        {addingNew || editingAnnotation ? (
-          <AnnotationEditor
-            annotation={editingAnnotation || {}}
-            carParts={carParts}
-            referenceNo={referenceNo}
-            imageName={imageName}
-            fetchDamageAnnotations={fetchDamageAnnotations}
-            isNew={addingNew}
-            onSave={(newAnnotation) => {
-              if (addingNew) {
-                handleAddAnnotation(newAnnotation);
-              } else {
-                setEditingAnnotation(null);
-              }
-            }}
-            onCancel={() => {
-              setAddingNew(false);
-              setEditingAnnotation(null);
-            }}
-            allowManualPrice={true}
-          />
-        ) : (
-          <div>
-            {/* Add New Annotation Button */}
-            <button
-              onClick={() => setAddingNew(true)}
-              className="bg-green-500 text-white px-4 py-2 rounded mb-4"
-            >
-              Add New Annotation
-            </button>
-
-            {/* Annotations List */}
-            <div className="space-y-3 sm:space-y-4 max-h-[500px] overflow-y-auto">
+      {/* Editor or Table */}
+      {addingNew || editingAnnotation ? (
+        <AnnotationEditor
+          annotation={editingAnnotation}
+          carParts={carParts}
+          referenceNo={referenceNo}
+          imageName={imageName}
+          fetchDamageAnnotations={fetchDamageAnnotations}
+          isNew={addingNew}
+          onSave={() => {
+            setAddingNew(false);
+            setEditingAnnotation(null);
+          }}
+          onCancel={() => {
+            setAddingNew(false);
+            setEditingAnnotation(null);
+          }}
+        />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Part Name
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Damage Type
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Action
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Cost
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
               {filteredAnnotations.map((annotation) => (
-                <div
-                  key={annotation.MLCaseImageAssessmentId}
-                  className="bg-white border rounded-lg p-4 hover:border-blue-500 transition-colors"
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h4 className="font-medium text-gray-900">
-                        {
-                          carParts.find(
-                            (part) => part.CarPartMasterID === annotation.CarPartMasterID
-                          )?.CarPartName || "N/A"
-                        }
-                      </h4>
-                      <p className="text-sm text-gray-500">
-                        {
-                          ["Scratch", "Dent", "Broken", "NA"][
-                            annotation.DamageTypeID
-                          ]
-                        }{" "}
-                        -{" "}
-                        {["Repair", "Replace", "NA"][annotation.RepairReplaceID]}
-                      </p>
-                    </div>
-                    <div className="flex space-x-2">
+                <tr key={annotation.MLCaseImageAssessmentId}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {carParts.find(
+                      (part) => part.CarPartMasterID === annotation.CarPartMasterID
+                    )?.CarPartName || 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <DamageTypeIndicator type={annotation.DamageTypeID} />
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      annotation.RepairReplaceID === 0
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {['Repair', 'Replace', 'NA'][annotation.RepairReplaceID]}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    ₹{annotation.ActualCostRepair || 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <div className="flex justify-end space-x-2">
                       <button
                         onClick={() => setEditingAnnotation(annotation)}
-                        className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                        className="text-blue-600 hover:text-blue-800"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(annotation.MLCaseImageAssessmentId)}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded"
+                        className="text-red-600 hover:text-red-800"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span
-                      className={`px-2 py-1 rounded ${
-                        annotation.RepairReplaceID === 0
-                          ? "bg-green-100 text-green-800"
-                          : "bg-yellow-100 text-yellow-800"
-                      }`}
-                    >
-                      {["Repair", "Replace", "NA"][annotation.RepairReplaceID]}
-                    </span>
-                    <span className="font-medium">
-                      ₹{annotation.ActualCostRepair || "N/A"}
-                    </span>
-                  </div>
-                </div>
+                  </td>
+                </tr>
               ))}
-            </div>
-          </div>
-        )}
-      </div>
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

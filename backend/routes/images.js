@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const s3 = require('../s3');
-const sizeOf = require('image-size'); // Import the image-size library
+const sizeOf = require('image-size');
 
 // Endpoint: List images with damage information based on ReferenceNo
 router.get('/images/:referenceNo', async (req, res) => {
@@ -99,45 +99,48 @@ router.get('/images/:referenceNo', async (req, res) => {
   }
 });
 
-// Helper function to parse the txt content
+// Helper function to parse the txt content and determine damage type
 function parseDamageReport(txtContent) {
   const lines = txtContent
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line.length > 0); // Filter out empty lines
+    .filter((line) => line.length > 0);
 
   return lines
     .map((line) => {
       try {
-        const [type, coords] = line.split(' '); // Split the line into type and coordinates
-
-        if (!type || !coords) {
+        const [damageInfo, coords] = line.split(' ');
+        if (!damageInfo || !coords) {
           throw new Error('Invalid line format');
         }
 
         const [x, y, x2, y2] = coords.split(',').map(Number);
 
-        // Validate parsed values
-        if ([type, x, y, x2, y2].some((value) => isNaN(value))) {
+        // Validate coordinates
+        if ([x, y, x2, y2].some((value) => isNaN(value))) {
           console.error(`Invalid coordinates in line: "${line}"`);
-          return null; // Return null to filter out invalid entries later
+          return null;
         }
 
+        // Convert the input damage type to our system's damage types
+        // 0: Scratch, 1: Dent, 2: Broken
+        const damageType = parseInt(damageInfo);
+        
         return {
-          repairReplace: type === '1' ? 'Repair' : 'Replace',
+          damageType: damageType >= 0 && damageType <= 2 ? damageType : 0,
           coordinates: {
             x,
             y,
-            width: x2 - x, // Calculate width
-            height: y2 - y, // Calculate height
+            width: x2 - x,
+            height: y2 - y,
           },
         };
       } catch (error) {
         console.error(`Error parsing line: "${line}"`, error);
-        return null; // Return null to filter out invalid entries later
+        return null;
       }
     })
-    .filter((entry) => entry !== null); // Remove null entries
+    .filter((entry) => entry !== null);
 }
 
 module.exports = router;
